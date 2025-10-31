@@ -1,4 +1,4 @@
-package com.inno.impl.dto;
+package com.inno.impl.dto.register;
 
 public record RegisterResponse(
         Long userId,

@@ -2,14 +2,17 @@ package com.inno.impl.filter;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.inno.impl.dto.RegisterRequest;
-import com.inno.impl.dto.RegisterResponse;
+import com.inno.impl.dto.auth.AuthRegisterResponse;
+import com.inno.impl.dto.register.RegisterRequest;
+import com.inno.impl.dto.register.RegisterResponse;
+import com.inno.impl.dto.user.UserResponseDto;
 import com.inno.impl.service.TransactionRollbackService;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponse;
@@ -23,7 +26,7 @@ import java.util.Map;
 
 @Component
 public class RegistrationFilter extends AbstractGatewayFilterFactory<RegistrationFilter.Config> {
-    private static final String REGISTER_PATH = "api/auth/register";
+    private static final String REGISTER_PATH = "/api/auth/register";
     private final WebClient userServiceClient;
     private final WebClient authServiceClient;
     private final TransactionRollbackService transactionRollbackService;
@@ -45,7 +48,8 @@ public class RegistrationFilter extends AbstractGatewayFilterFactory<Registratio
     @Override
     public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
-            if(REGISTER_PATH.equals(exchange.getRequest().getURI().getPath())) {
+            if(REGISTER_PATH.equals(exchange.getRequest().getURI().getPath())
+                    && HttpMethod.POST.equals(exchange.getRequest().getMethod())) {
                 return handleRegistration(exchange);
             }
             return chain.filter(exchange);
@@ -77,7 +81,7 @@ public class RegistrationFilter extends AbstractGatewayFilterFactory<Registratio
                         "password", request.password()
                 ))
                 .retrieve()
-                .bodyToMono(Map.class)
+                .bodyToMono(AuthRegisterResponse.class)
                 .flatMap(authResponse -> userServiceClient.post()
                         .uri("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -88,20 +92,20 @@ public class RegistrationFilter extends AbstractGatewayFilterFactory<Registratio
                                 "email", request.email()
                         ))
                         .retrieve()
-                        .bodyToMono(Map.class)
+                        .bodyToMono(UserResponseDto.class)
                         .flatMap(userResponse -> sendSuccess(
                                 exchange,
                                 new RegisterResponse(
-                                        Long.valueOf(userResponse.get("id").toString()),
-                                        authResponse.get("login").toString(),
+                                        userResponse.id(),
+                                        authResponse.login(),
                                         "User has been registered successfully!"
                                 )
                         ))
-                        .onErrorResume(ex -> transactionRollbackService.rollbackAuthCredentials(authResponse.get("login").toString())
+                        .onErrorResume(ex -> transactionRollbackService.rollbackAuthCredentials(authResponse.login())
                                 .then(sendError(exchange, "Failed to create user profile", HttpStatus.INTERNAL_SERVER_ERROR))
                         )
-                        .onErrorResume(e -> sendError(exchange, "Registration failed: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR))
-                );
+                )
+                .onErrorResume(e -> sendError(exchange, "Registration failed: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR));
     }
 
     private Mono<Void> sendSuccess(ServerWebExchange exchange, RegisterResponse response) {
