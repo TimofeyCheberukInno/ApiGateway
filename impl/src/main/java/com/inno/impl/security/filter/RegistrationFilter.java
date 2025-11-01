@@ -1,4 +1,4 @@
-package com.inno.impl.filter;
+package com.inno.impl.security.filter;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

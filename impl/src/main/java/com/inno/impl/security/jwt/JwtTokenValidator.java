@@ -1,4 +1,4 @@
-package com.inno.impl.security;
+package com.inno.impl.security.jwt;
 
 import com.inno.impl.exception.AuthenticationException;
 import com.inno.impl.exception.TokenExpiredException;
