@@ -7,6 +7,7 @@ import com.inno.impl.dto.register.RegisterRequest;
 import com.inno.impl.dto.register.RegisterResponse;
 import com.inno.impl.dto.user.UserResponseDto;
 import com.inno.impl.service.TransactionRollbackService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -24,6 +25,7 @@ import reactor.core.publisher.Mono;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
+@Slf4j
 @Component
 public class RegistrationFilter extends AbstractGatewayFilterFactory<RegistrationFilter.Config> {
     private static final String REGISTER_PATH = "/api/auth/register";
@@ -82,37 +84,59 @@ public class RegistrationFilter extends AbstractGatewayFilterFactory<Registratio
                 ))
                 .retrieve()
                 .bodyToMono(AuthRegisterResponse.class)
-                .flatMap(authResponse -> userServiceClient.post()
-                        .uri("/api/users")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(Map.of(
-                                "name", request.name(),
-                                "surname", request.surname(),
-                                "birthDate", request.birthDate(),
-                                "email", request.email()
-                        ))
-                        .retrieve()
-                        .bodyToMono(UserResponseDto.class)
-                        .flatMap(userResponse -> sendSuccess(
-                                exchange,
-                                new RegisterResponse(
-                                        userResponse.id(),
-                                        authResponse.login(),
-                                        "User has been registered successfully!"
-                                )
-                        ))
-                        .onErrorResume(ex -> transactionRollbackService.rollbackAuthCredentials(authResponse.login())
-                                .then(sendError(exchange, "Failed to create user profile", HttpStatus.INTERNAL_SERVER_ERROR))
-                        )
-                )
-                .onErrorResume(e -> sendError(exchange, "Registration failed: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR));
+                .flatMap(authResponse -> {
+                    log.atInfo()
+                            .addArgument(authResponse.login())
+                            .log("Auth credentials created successfully for user: {}");
+
+                    return userServiceClient.post()
+                            .uri("/api/users")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .bodyValue(Map.of(
+                                    "name", request.name(),
+                                    "surname", request.surname(),
+                                    "birthDate", request.birthDate(),
+                                    "email", request.email()
+                            ))
+                            .retrieve()
+                            .bodyToMono(UserResponseDto.class)
+                            .flatMap(userResponse -> {
+                                log.atInfo()
+                                        .addArgument(userResponse.id())
+                                        .log("User profile created successfully with ID: {}");
+
+                                return sendSuccess(
+                                        exchange,
+                                        new RegisterResponse(
+                                                userResponse.id(),
+                                                authResponse.login(),
+                                                "User has been registered successfully!"
+                                        )
+                                );
+                            })
+                            .onErrorResume(ex -> {
+                                log.atError()
+                                        .addArgument(ex.getMessage())
+                                        .log("Failed to create user in user service: {}");
+
+                                return  transactionRollbackService.rollbackAuthCredentials(authResponse.login())
+                                            .then(sendError(exchange, "Failed to create user profile", HttpStatus.INTERNAL_SERVER_ERROR));
+                            });
+                })
+                .onErrorResume(e -> {
+                    log.atError()
+                            .addArgument(e.getMessage())
+                            .log("Registration failed: {}");
+
+                    return sendError(exchange, "Registration failed: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+                });
     }
 
     private Mono<Void> sendSuccess(ServerWebExchange exchange, RegisterResponse response) {
         try{
             String json = objectMapper.writeValueAsString(response);
             ServerHttpResponse serverHttpResponse = exchange.getResponse();
-            serverHttpResponse.setStatusCode(HttpStatus.CREATED);
+               serverHttpResponse.setStatusCode(HttpStatus.CREATED);
             serverHttpResponse.getHeaders().add(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
 
             byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
@@ -120,6 +144,9 @@ public class RegistrationFilter extends AbstractGatewayFilterFactory<Registratio
             Mono<DataBuffer> dataBufferMono = Mono.just(dataBuffer);
             return serverHttpResponse.writeWith(dataBufferMono);
         } catch (JsonProcessingException e) {
+            log.atError()
+                    .addArgument(e.getMessage())
+                    .log("Error serializing response: {}");
             throw new RuntimeException(e);
         }
     }
@@ -141,6 +168,9 @@ public class RegistrationFilter extends AbstractGatewayFilterFactory<Registratio
             Mono<DataBuffer> dataBufferMono = Mono.just(dataBuffer);
             return serverHttpResponse.writeWith(dataBufferMono);
         } catch (JsonProcessingException e) {
+            log.atError()
+                    .addArgument(e.getMessage())
+                    .log("Error creating error response: {}");
             throw new RuntimeException(e);
         }
     }

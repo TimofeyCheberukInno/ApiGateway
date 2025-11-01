@@ -12,14 +12,14 @@ spring:
               predicates:
                 - Path=/api/users/**
               filters:
-                - name: NonAuthenticationServiceFilter
+                - name: AuthCheckFilter
 
             - id: user_service_cards_route
               uri: ${USER_SERVICE_URI}
               predicates:
                 - Path=/api/cards/**
               filters:
-                - name: NonAuthenticationServiceFilter
+                - name: AuthCheckFilter
 
             - id: auth_service_registration_route
               uri: ${AUTH_SERVICE_URI}
@@ -38,14 +38,14 @@ spring:
               predicates:
                 - Path=/api/items/**
               filters:
-                - name: NonAuthenticationServiceFilter
+                - name: AuthCheckFilter
 
             - id: order_service_orders_route
               uri: ${ORDER_SERVICE_URI}
               predicates:
                 - Path=/api/orders/**
               filters:
-                - name: NonAuthenticationServiceFilter
+                - name: AuthCheckFilter
 
 jwt:
   secret:
