@@ -53,7 +53,7 @@ public class TransactionRollbackService {
                 .log("Rolling back auth credentials for login: {}");
 
         return authServiceClient.put()
-                .uri("/api/auth/deactivate")
+                .uri("/api/auth/delete")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("login", login))
                 .retrieve()
@@ -61,7 +61,7 @@ public class TransactionRollbackService {
                 .doOnSuccess(_ -> {
                     log.atInfo()
                             .addArgument(login)
-                            .log("Successfully deactivated auth credentials: {}");
+                            .log("Successfully deleted auth credentials: {}");
                 })
                 .onErrorResume(WebClientResponseException.class, ex -> {
                     if (ex.getStatusCode().value() == 404) {
