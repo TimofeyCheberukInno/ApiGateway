@@ -26,8 +26,10 @@ services:
   user-service:
     image: user-service
     expose:
-      - "${USER_SERVICE_PORT}"
+      - "${DEFAULT_SERVICE_PORT}"
+      - "${DEFAULT_ACTUATOR_PORT}"
     environment:
+      SPRING_PROFILES_ACTIVE: dev
       DB_HOST: ${USER_SERVICE_DB_HOST}
       DB_PORT: ${USER_SERVICE_DB_PORT}
       DB_USERNAME: ${USER_SERVICE_DB_USERNAME}
@@ -42,12 +44,20 @@ services:
         condition: service_healthy
     networks:
       - internal
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${DEFAULT_ACTUATOR_PORT}/internal/user-service/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   auth-service:
     image: auth-service
     expose:
-      - "${AUTH_SERVICE_PORT}"
+      - "${DEFAULT_SERVICE_PORT}"
+      - "${DEFAULT_ACTUATOR_PORT}"
     environment:
+      SPRING_PROFILES_ACTIVE: dev
       DB_HOST: ${AUTH_SERVICE_DB_HOST}
       DB_USERNAME: ${AUTH_SERVICE_DB_USERNAME}
       DB_PASSWORD: ${AUTH_SERVICE_DB_PASSWORD}
@@ -61,12 +71,43 @@ services:
         condition: service_healthy
     networks:
       - internal
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${DEFAULT_ACTUATOR_PORT}/internal/auth-service/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  order-service:
+    image: order-service
+    expose:
+      - "${DEFAULT_SERVICE_PORT}"
+      - "${DEFAULT_ACTUATOR_PORT}"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_HOST: ${ORDER_SERVICE_DB_HOST}
+      DB_PORT: ${ORDER_SERVICE_DB_PORT}
+      DB_USERNAME: ${ORDER_SERVICE_DB_USERNAME}
+      DB_PASSWORD: ${ORDER_SERVICE_DB_PASSWORD}
+      DB_NAME: ${ORDER_SERVICE_DB_NAME}
+      USER_SERVICE_URL: ${USER_SERVICE_URI}
+    depends_on:
+      order_db:
+        condition: service_healthy
+    networks:
+      - internal
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${DEFAULT_ACTUATOR_PORT}/internal/order-service/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # Databases
   user_db:
     image: postgres:17-alpine
     expose:
-      - "${USER_SERVICE_DB_PORT}"
+      - "${DEFAULT_DB_PORT}"
     environment:
       POSTGRES_USER: ${USER_SERVICE_DB_USERNAME}
       POSTGRES_PASSWORD: ${USER_SERVICE_DB_PASSWORD}
@@ -80,11 +121,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   auth_db:
     image: postgres:17-alpine
     expose:
-      - "${AUTH_SERVICE_DB_PORT}"
+      - "${DEFAULT_DB_PORT}"
     environment:
       POSTGRES_USER: ${AUTH_SERVICE_DB_USERNAME}
       POSTGRES_PASSWORD: ${AUTH_SERVICE_DB_PASSWORD}
@@ -98,11 +140,31 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 20s
+
+  order_db:
+    image: postgres:17-alpine
+    expose:
+      - "${DEFAULT_DB_PORT}"
+    environment:
+      POSTGRES_USER: ${ORDER_SERVICE_DB_USERNAME}
+      POSTGRES_PASSWORD: ${ORDER_SERVICE_DB_PASSWORD}
+      POSTGRES_DB: ${ORDER_SERVICE_DB_NAME}
+    volumes:
+      - order_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${ORDER_SERVICE_DB_USERNAME} -d ${ORDER_SERVICE_DB_NAME}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   user_cache:
     image: redis:7.0-alpine
     expose:
-      - "${USER_SERVICE_REDIS_PORT}"
+      - "${DEFAULT_CACHE_PORT}"
     volumes:
       - user_cache_data:/data
     networks:
@@ -112,6 +174,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
 # Networks
 networks:
@@ -127,5 +190,7 @@ volumes:
     name: ${USER_SERVICE_NAME}_db_data
   auth_data:
     name: ${AUTH_SERVICE_NAME}_db_data
+  order_data:
+    name: ${ORDER_SERVICE_NAME}_db_data
   user_cache_data:
     name: ${REDIS_SERVICE_NAME}_db_data
