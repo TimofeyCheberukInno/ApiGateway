@@ -1,1 +1,52 @@
-spring.application.name=impl
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: user_service_users_route
+              uri: ${USER_SERVICE_URI}
+              predicates:
+                - Path=/api/users/**
+              filters:
+                - name: AuthCheckFilter
+
+            - id: user_service_cards_route
+              uri: ${USER_SERVICE_URI}
+              predicates:
+                - Path=/api/cards/**
+              filters:
+                - name: AuthCheckFilter
+
+            - id: auth_service_registration_route
+              uri: ${AUTH_SERVICE_URI}
+              predicates:
+                - Path=/api/auth/register
+              filters:
+                - name: RegistrationFilter
+
+            - id: auth_service_route
+              uri: ${AUTH_SERVICE_URI}
+              predicates:
+                - Path=/api/auth/**
+
+            - id: order_service_items_route
+              uri: ${ORDER_SERVICE_URI}
+              predicates:
+                - Path=/api/items/**
+              filters:
+                - name: AuthCheckFilter
+
+            - id: order_service_orders_route
+              uri: ${ORDER_SERVICE_URI}
+              predicates:
+                - Path=/api/orders/**
+              filters:
+                - name: AuthCheckFilter
+
+jwt:
+  secret:
+    key: ${JWT_SECRET_KEY}
